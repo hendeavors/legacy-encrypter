@@ -14,12 +14,16 @@
         }
     ],
     "require": {
-        "php": ">=5.5.9",
+        "php": "^7.2",
         "ext-mbstring": "*",
         "ext-openssl": "*",
-        "illuminate/contracts": ">=5.3",
-        "illuminate/support": ">=5.3",
-        "paragonie/random_compat": "~1.4|~2.0"
+        "illuminate/contracts": "5.8.*",
+        "illuminate/support": "5.8.*",
+        "paragonie/random_compat": "~1.4|~2.0",
+        "phpseclib/mcrypt_compat": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "~7.5"
     },
     "autoload": {
         "psr-4": {

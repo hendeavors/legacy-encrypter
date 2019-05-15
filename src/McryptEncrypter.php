@@ -4,6 +4,7 @@ namespace Laravel\LegacyEncrypter;
 
 use Exception;
 use RuntimeException;
+use UnexpectedValueException;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Contracts\Encryption\EncryptException;
 use Illuminate\Contracts\Encryption\Encrypter as EncrypterContract;
@@ -19,6 +20,13 @@ class McryptEncrypter extends BaseEncrypter implements EncrypterContract
      * @var string
      */
     protected $cipher;
+
+    /**
+	 * The mode used for encryption.
+	 *
+	 * @var string
+	 */
+	protected $mode = MCRYPT_MODE_CBC;
 
     /**
      * The block size of the cipher.
@@ -70,11 +78,11 @@ class McryptEncrypter extends BaseEncrypter implements EncrypterContract
      *
      * @throws \Illuminate\Contracts\Encryption\EncryptException
      */
-    public function encrypt($value)
+    public function encrypt($value, $serialize = true)
     {
         $iv = mcrypt_create_iv($this->getIvSize(), $this->getRandomizer());
 
-        $value = base64_encode($this->padAndMcrypt($value, $iv));
+        $value = base64_encode($this->padAndMcrypt($value, $iv, $serialize));
 
         // Once we have the encrypted value we will go ahead base64_encode the input
         // vector and create the MAC for the encrypted value so we can verify its
@@ -97,9 +105,9 @@ class McryptEncrypter extends BaseEncrypter implements EncrypterContract
      * @param  string  $iv
      * @return string
      */
-    protected function padAndMcrypt($value, $iv)
+    protected function padAndMcrypt($value, $iv, $serialize = true)
     {
-        $value = $this->addPadding(serialize($value));
+        $value = $this->addPadding($serialize ? serialize($value) : $value);
 
         return mcrypt_encrypt($this->cipher, $this->key, $value, MCRYPT_MODE_CBC, $iv);
     }
@@ -110,7 +118,7 @@ class McryptEncrypter extends BaseEncrypter implements EncrypterContract
      * @param  string  $payload
      * @return string
      */
-    public function decrypt($payload)
+    public function decrypt($payload, $unserialize = true)
     {
         $payload = $this->getJsonPayload($payload);
 
@@ -121,7 +129,47 @@ class McryptEncrypter extends BaseEncrypter implements EncrypterContract
 
         $iv = base64_decode($payload['iv']);
 
-        return unserialize($this->stripPadding($this->mcryptDecrypt($value, $iv)));
+        $decrypted = $this->stripPadding($this->mcryptDecrypt($value, $iv));
+
+        try {
+            return $unserialize ? unserialize($decrypted) : $decrypted;
+        } catch(RuntimeException $e) {
+            throw new UnexpectedValueException(sprintf("The value [$decrypted] cannot be unserialized. Did you forget to set %s to false?", '$unserialize'));
+        }
+    }
+
+    /**
+     * Set the encryption cipher.
+     *
+     * @param  string  $cipher
+     * @return void
+     */
+    public function setCipher($cipher)
+    {
+        $this->cipher = $cipher;
+        $this->updateBlockSize();
+    }
+
+    /**
+     * Set the encryption mode.
+     *
+     * @param  string  $mode
+     * @return void
+     */
+    public function setMode($mode)
+    {
+        $this->mode = $mode;
+        $this->updateBlockSize();
+    }
+
+    /**
+     * Update the block size for the current cipher and mode.
+     *
+     * @return void
+     */
+    protected function updateBlockSize()
+    {
+        $this->block = mcrypt_get_iv_size($this->cipher, $this->mode);
     }
 
     /**
